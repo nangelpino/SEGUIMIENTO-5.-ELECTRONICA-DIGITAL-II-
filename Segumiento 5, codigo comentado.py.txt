@@ -1,0 +1,222 @@
+import gc                          # Librería para liberar memoria automáticamente
+import time                        # Manejo de tiempo (timestamps, delays)
+import ujson                       # Manejo de datos JSON en MicroPython
+import dht                         # Librería para sensores DHT
+import uasyncio as asyncio         # Programación asíncrona
+import network                     # Manejo de red WiFi
+import urequests                   # Permite hacer peticiones HTTP
+
+from machine import Pin, I2C, PWM  # Control de pines, comunicación I2C y PWM
+from mpu6050 import MPU6050        # Librería del sensor MPU6050
+
+
+# ======================================================
+# CONFIGURACION GENERAL
+# ======================================================
+
+TIPO_DHT = "DHT11"  # Define el tipo de sensor DHT a usar
+
+BOT_TOKEN = "8714231259:AAFgi3bfxKQXWop5iThKQC0tMV80P_EPDMM"  # Token del bot de Telegram
+CHAT_ID = "8889804535"  # ID del chat donde se enviarán mensajes
+
+# Pines del ESP32
+PIN_DHT = 4       # Pin de datos del sensor DHT
+PIN_SDA = 21      # Pin SDA para I2C
+PIN_SCL = 22      # Pin SCL para I2C
+PIN_BUZZER = 27   # Pin del buzzer
+PIN_PULSADOR = 18 # Pin del botón de pánico
+
+# Umbrales ambientales
+TEMP_MIN = 18.0   # Temperatura mínima permitida
+TEMP_MAX = 35.0   # Temperatura máxima permitida
+HUM_MIN = 40.0    # Humedad mínima permitida
+HUM_MAX = 70.0    # Humedad máxima permitida
+
+# Umbrales de movimiento (en g)
+MOV_NORMAL_G = 1.15  # Movimiento leve
+MOV_BRUSCO_G = 1.80  # Movimiento brusco
+
+# Intervalos de operación
+INTERVALO_SENSORES = 2   # Tiempo entre lecturas de sensores (segundos)
+INTERVALO_TELEGRAM = 5   # Tiempo entre consultas a Telegram
+ANTI_SPAM_ALERTA = 60    # Tiempo mínimo entre alertas repetidas
+
+
+# ======================================================
+# INICIALIZACION DE HARDWARE
+# ======================================================
+
+if TIPO_DHT.upper() == "DHT11":            # Verifica tipo de sensor
+    sensor_dht = dht.DHT11(Pin(PIN_DHT))   # Inicializa DHT11
+else:
+    sensor_dht = dht.DHT22(Pin(PIN_DHT))   # Inicializa DHT22
+
+i2c = I2C(0, sda=Pin(PIN_SDA), scl=Pin(PIN_SCL), freq=400000)  # Inicializa bus I2C
+mpu = MPU6050(i2c)                                             # Inicializa MPU6050
+
+buzzer = PWM(Pin(PIN_BUZZER))  # Configura el buzzer como PWM
+buzzer.duty(0)                 # Apaga el buzzer inicialmente
+
+pulsador = Pin(PIN_PULSADOR, Pin.IN, Pin.PULL_UP)  # Botón con resistencia pull-up
+
+
+# ======================================================
+# ESTADO GLOBAL
+# ======================================================
+
+estado = {  # Diccionario global del sistema
+    "temperatura": None,        # Valor actual de temperatura
+    "humedad": None,            # Valor actual de humedad
+    "ax": 0.0,                  # Aceleración eje X
+    "ay": 0.0,                  # Aceleración eje Y
+    "az": 0.0,                  # Aceleración eje Z
+    "magnitud_g": 1.0,          # Magnitud total de aceleración
+    "movimiento": "SIN DATO",   # Estado de movimiento
+    "alarma": "INICIANDO",      # Estado de alarma
+    "panico": "INACTIVO",       # Estado del botón de pánico
+    "ip": "SIN IP",             # Dirección IP del ESP32
+    "dht_ok": False,            # Estado del sensor DHT
+    "ultima_actualizacion": "SIN DATO"  # Timestamp última actualización
+}
+
+ultimo_envio_alerta = {}  # Guarda el último envío por tipo de alerta
+telegram_offset = 0       # Control de mensajes de Telegram
+
+
+# ======================================================
+# FUNCIONES AUXILIARES
+# ======================================================
+
+def obtener_ip():  # Obtiene la IP del ESP32
+    wlan = network.WLAN(network.STA_IF)  # Modo estación
+    if wlan.isconnected():               # Si está conectado a WiFi
+        return wlan.ifconfig()[0]        # Devuelve IP
+    return "SIN CONEXION WIFI"           # Si no hay conexión
+
+
+def url_encode(texto):  # Codifica texto para URL
+    texto = str(texto)  # Convierte a string
+
+    reemplazos = {      # Diccionario de reemplazos
+        "%": "%25", " ": "%20", "\n": "%0A",
+        ":": "%3A", "/": "%2F", "#": "%23",
+        "&": "%26", "?": "%3F", "=": "%3D",
+        "+": "%2B", "°": "%C2%B0",
+        "¡": "", "!": "%21",
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+        "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U",
+        "ñ": "n", "Ñ": "N"
+    }
+
+    for original, codificado in reemplazos.items():  # Recorre cada carácter
+        texto = texto.replace(original, codificado)  # Lo reemplaza
+
+    return texto  # Retorna texto codificado
+
+
+def telegram_configurado():  # Verifica si Telegram está configurado
+    return (
+        BOT_TOKEN != "TU_TOKEN_DE_TELEGRAM" and
+        CHAT_ID != "TU_CHAT_ID" and
+        len(BOT_TOKEN) > 10 and
+        len(CHAT_ID) > 0
+    )
+
+
+def mensaje_estado():  # Genera mensaje completo del sistema
+    temp = "SIN LECTURA" if estado["temperatura"] is None else "{:.1f} C".format(estado["temperatura"])
+    hum = "SIN LECTURA" if estado["humedad"] is None else "{:.1f} %".format(estado["humedad"])
+
+    return (
+        "ESTADO DEL SISTEMA\n"
+        "Temperatura: {}\n"
+        "Humedad: {}\n"
+        "DHT: {}\n"
+        "Movimiento: {}\n"
+        "Magnitud: {:.2f} g\n"
+        "Alarma: {}\n"
+        "Boton panico: {}\n"
+        "IP: {}"
+    ).format(
+        temp,
+        hum,
+        "OK" if estado["dht_ok"] else "SIN LECTURA",
+        estado["movimiento"],
+        estado["magnitud_g"],
+        estado["alarma"],
+        estado["panico"],
+        estado["ip"]
+    )
+
+
+def mensaje_umbrales():  # Genera mensaje de umbrales
+    return (
+        "UMBRALES CONFIGURADOS\n"
+        "Temperatura minima: {:.1f} C\n"
+        "Temperatura maxima: {:.1f} C\n"
+        "Humedad minima: {:.1f} %\n"
+        "Humedad maxima: {:.1f} %\n"
+        "Movimiento normal: > {:.2f} g\n"
+        "Movimiento brusco: > {:.2f} g"
+    ).format(TEMP_MIN, TEMP_MAX, HUM_MIN, HUM_MAX, MOV_NORMAL_G, MOV_BRUSCO_G)
+async def enviar_telegram(mensaje):  # Envía mensaje a Telegram
+    if not telegram_configurado():   # Si no está configurado
+        print("Telegram no configurado:", mensaje)
+        return False
+
+    try:
+        url = (  # Construye URL de la API
+            "https://api.telegram.org/bot{}/sendMessage?chat_id={}&text={}"
+            .format(BOT_TOKEN, CHAT_ID, url_encode(mensaje))
+        )
+
+        respuesta = urequests.get(url)  # Envía petición
+        codigo = respuesta.status_code # Guarda código HTTP
+        respuesta.close()              # Cierra conexión
+
+        return codigo == 200           # Retorna True si fue exitoso
+
+    except Exception as e:
+        print("Error enviando Telegram:", e)
+        return False
+
+
+async def alerta_sonora(tipo):  # Genera sonido según alerta
+    if tipo == "TEMPERATURA":
+        frecuencia, repeticiones = 1000, 2
+    elif tipo == "HUMEDAD":
+        frecuencia, repeticiones = 1300, 3
+    elif tipo == "MOVIMIENTO":
+        frecuencia, repeticiones = 2000, 4
+    elif tipo == "PANICO":
+        frecuencia, repeticiones = 2500, 5
+    elif tipo == "DHT":
+        frecuencia, repeticiones = 700, 1
+    else:
+        frecuencia, repeticiones = 900, 1
+
+    for _ in range(repeticiones):   # Repite el sonido
+        buzzer.freq(frecuencia)     # Define frecuencia
+        buzzer.duty(512)            # Activa buzzer
+        await asyncio.sleep(0.16)   # Espera
+        buzzer.duty(0)              # Apaga
+        await asyncio.sleep(0.12)   # Pausa
+
+    buzzer.duty(0)  # Asegura que quede apagado
+
+
+async def main():  # Función principal
+    print("Iniciando sistema Seguimiento V...")  # Mensaje inicial
+    estado["ip"] = obtener_ip()                 # Guarda IP
+
+    asyncio.create_task(alerta_sonora("TEMPERATURA"))  # Ejemplo de tarea
+
+    while True:  # Loop infinito
+        await asyncio.sleep(10)  # Mantiene el sistema activo
+
+
+try:
+    asyncio.run(main())  # Ejecuta programa principal
+finally:
+    buzzer.duty(0)       # Apaga buzzer al salir
+    asyncio.new_event_loop()  # Reinicia loop

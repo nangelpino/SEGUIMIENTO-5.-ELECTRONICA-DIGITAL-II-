@@ -1,0 +1,818 @@
+\documentclass[12pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{graphicx}
+\usepackage{geometry}
+\usepackage{hyperref}
+\geometry{margin=2.5cm}
+
+\title{SEGUIMIENTO V}
+\author{Sara Rondon, Natalia Ángel\\ Electrónica digital II}
+\date{}
+
+\definecolor{codegray}{rgb}{0.95,0.95,0.95}
+\definecolor{mygreen}{rgb}{0,0.6,0}
+
+\lstset{
+    backgroundcolor=\color{codegray},
+    basicstyle=\ttfamily\footnotesize,
+    breaklines=true,
+    frame=single,
+    captionpos=b,
+    numbers=left,
+    numberstyle=\tiny,
+    keywordstyle=\color{blue},
+    commentstyle=\color{mygreen},
+    stringstyle=\color{red},
+    showstringspaces=false
+}
+
+\begin{document}
+\maketitle
+\tableofcontents
+\newpage
+
+\section{Identificación del proyecto}
+\begin{itemize}
+    \item \textbf{Nombre del proyecto:} Sistema IoT de monitoreo de temperatura, humedad y movimiento
+    \item \textbf{Integrantes del equipo:} Sara Rondon, Natalia Ángel
+    \item \textbf{Asignatura:} Electrónica Digital II
+\end{itemize}
+
+\section{Resumen}
+El proyecto consiste en el desarrollo de un sistema IoT basado en el microcontrolador ESP32, orientado al monitoreo de variables ambientales y de movimiento en tiempo real. El sistema permite medir temperatura y humedad mediante un sensor DHT, así como detectar el estado dinámico del sistema mediante un acelerómetro MPU6050.
+
+Se implementa un servidor web embebido que permite visualizar los datos en tiempo real desde un navegador, así como un bot de Telegram que permite el monitoreo remoto y la interacción mediante comandos. El sistema también incluye un conjunto de alertas multimodales que combinan señales sonoras, visualización web y notificaciones remotas.
+
+\section{Descripción del hardware}
+
+El sistema está basado en el microcontrolador ESP32, encargado del procesamiento de datos y la comunicación del sistema.
+
+\textbf{Entradas}
+\begin{itemize}
+    \item Sensor DHT11/DHT22 (GPIO 4): medición de temperatura y humedad.
+    \item Sensor MPU6050 (I2C GPIO 21 SDA, GPIO 22 SCL): medición de aceleración y detección de movimiento.
+    \item Pulsador (GPIO 18): botón de pánico.
+\end{itemize}
+
+\textbf{Procesamiento}
+\begin{itemize}
+    \item Lectura de sensores y cálculo de variables ambientales.
+    \item Análisis de movimiento mediante magnitud del vector de aceleración.
+    \item Evaluación de umbrales y generación de alertas.
+\end{itemize}
+
+\textbf{Salidas}
+\begin{itemize}
+    \item Buzzer pasivo (GPIO 27): generación de alertas sonoras.
+    \item Comunicación web mediante WiFi.
+    \item Notificaciones remotas mediante bot de Telegram.
+\end{itemize}
+
+El sistema es alimentado mediante el puerto USB del ESP32.
+
+\begin{figure}
+        \centering
+        \includegraphics[width=0.5\linewidth]{DIAGRAMA5.png}
+        \caption{Diagrama de conexión del sistema}
+\end{figure}
+
+\section{Descripción del software}
+El software está desarrollado en MicroPython y utiliza programación asíncrona mediante la librería \texttt{uasyncio}.
+
+El sistema se divide en múltiples tareas concurrentes que permiten ejecutar simultáneamente la lectura de sensores, el servidor web y la comunicación con Telegram. Esto garantiza un funcionamiento eficiente y en tiempo real.
+
+Se utilizan librerías como \texttt{network} para conexión WiFi, \texttt{urequests} para comunicación HTTP y \texttt{ujson} para manejo de datos.
+
+\section{Estructura del código}
+El código se encuentra organizado en los siguientes bloques:
+
+\begin{itemize}
+    \item Configuración de parámetros globales y umbrales.
+    \item Inicialización del hardware (sensores, buzzer y pulsador).
+    \item Estado global del sistema.
+    \item Funciones auxiliares.
+    \item Sistema de alertas.
+    \item Tareas asíncronas (sensores, servidor web y Telegram).
+    \item Programa principal.
+\end{itemize}
+
+\section{Explicación de funciones principales}
+
+\begin{itemize}
+    \item \texttt{obtener\_ip():} Obtiene la dirección IP del ESP32.
+    \item \texttt{url\_encode():} Codifica mensajes para envío mediante URL.
+    \item \texttt{enviar\_telegram():} Envía mensajes al bot de Telegram.
+    \item \texttt{alerta\_sonora():} Genera diferentes patrones sonoros según el tipo de alerta.
+    \item \texttt{disparar\_alerta():} Gestiona las alertas evitando envíos repetitivos.
+    \item \texttt{leer\_dht\_seguro():} Lee el sensor DHT manejando errores.
+    \item \texttt{tarea\_sensores():} Gestiona la lectura de sensores y evaluación de condiciones.
+    \item \texttt{servidor\_web():} Implementa el servidor HTTP embebido.
+    \item \texttt{tarea\_telegram():} Gestiona la interacción con el bot de Telegram.
+\end{itemize}
+
+\section{Comunicación (si aplica)}
+La comunicación del sistema se realiza mediante conexión WiFi.
+
+El ESP32 ejecuta un servidor web embebido que permite la visualización de datos en tiempo real. Adicionalmente, se implementa un bot de Telegram que permite monitorear el sistema de forma remota y recibir alertas.
+
+\section{Interfaz de usuario (si aplica)}
+La interfaz de usuario está compuesta por dos elementos principales:
+
+\textbf{Interfaz web}
+\begin{itemize}
+    \item Visualización de temperatura, humedad y movimiento.
+    \item Estado de alarmas.
+    \item Actualización automática en tiempo real.
+\end{itemize}
+
+\textbf{Bot de Telegram}
+\begin{itemize}
+    \item Permite consultar variables del sistema.
+    \item Permite recibir alertas.
+    \item Incluye comandos como /estado, /temp, /humedad y /movimiento.
+\end{itemize}
+
+\section{Manejo de errores y seguridad}
+El sistema utiliza estructuras \texttt{try/except} para garantizar su estabilidad frente a errores de lectura de sensores o fallos de comunicación.
+
+Además, se implementa control de spam en las alertas y liberación de memoria mediante \texttt{gc.collect()}, asegurando un funcionamiento continuo sin bloqueos.
+
+\section{Código fuente}
+\begin{lstlisting}
+import gc
+import time
+import ujson
+import dht
+import uasyncio as asyncio
+import network
+import urequests
+
+from machine import Pin, I2C, PWM
+from mpu6050 import MPU6050
+
+
+# ======================================================
+# CONFIGURACION GENERAL
+# ======================================================
+
+# IMPORTANTE:
+TIPO_DHT = "DHT11"
+
+# Configuracion de Telegram.
+# Cambiar por los datos reales del bot.
+BOT_TOKEN = "8714231259:AAFgi3bfxKQXWop5iThKQC0tMV80P_EPDMM"
+CHAT_ID = "8889804535"
+
+# Pines ESP32.
+PIN_DHT = 4
+PIN_SDA = 21
+PIN_SCL = 22
+PIN_BUZZER = 27
+PIN_PULSADOR = 18
+
+# Umbrales ambientales.
+TEMP_MIN = 18.0
+TEMP_MAX = 35.0
+HUM_MIN = 40.0
+HUM_MAX = 70.0
+
+# Umbrales de movimiento en unidades de g.
+MOV_NORMAL_G = 1.15
+MOV_BRUSCO_G = 1.80
+
+# Intervalos de operacion.
+INTERVALO_SENSORES = 2       # segundos
+INTERVALO_TELEGRAM = 5       # segundos
+ANTI_SPAM_ALERTA = 60        # segundos entre alertas repetidas del mismo tipo
+
+
+# ======================================================
+# INICIALIZACION DE HARDWARE
+# ======================================================
+
+if TIPO_DHT.upper() == "DHT11":
+    sensor_dht = dht.DHT11(Pin(PIN_DHT))
+else:
+    sensor_dht = dht.DHT22(Pin(PIN_DHT))
+
+i2c = I2C(0, sda=Pin(PIN_SDA), scl=Pin(PIN_SCL), freq=400000)
+mpu = MPU6050(i2c)
+
+buzzer = PWM(Pin(PIN_BUZZER))
+buzzer.duty(0)
+
+pulsador = Pin(PIN_PULSADOR, Pin.IN, Pin.PULL_UP)
+
+
+# ======================================================
+# ESTADO GLOBAL
+# ======================================================
+
+estado = {
+    "temperatura": None,
+    "humedad": None,
+    "ax": 0.0,
+    "ay": 0.0,
+    "az": 0.0,
+    "magnitud_g": 1.0,
+    "movimiento": "SIN DATO",
+    "alarma": "INICIANDO",
+    "panico": "INACTIVO",
+    "ip": "SIN IP",
+    "dht_ok": False,
+    "ultima_actualizacion": "SIN DATO"
+}
+
+ultimo_envio_alerta = {}
+telegram_offset = 0
+
+
+# ======================================================
+# FUNCIONES AUXILIARES
+# ======================================================
+
+def obtener_ip():
+    wlan = network.WLAN(network.STA_IF)
+    if wlan.isconnected():
+        return wlan.ifconfig()[0]
+    return "SIN CONEXION WIFI"
+
+
+def url_encode(texto):
+    """
+    Codificacion basica para enviar texto por URL a Telegram.
+    Evita caracteres problematicos en MicroPython.
+    """
+    texto = str(texto)
+
+    reemplazos = {
+        "%": "%25",
+        " ": "%20",
+        "\n": "%0A",
+        ":": "%3A",
+        "/": "%2F",
+        "#": "%23",
+        "&": "%26",
+        "?": "%3F",
+        "=": "%3D",
+        "+": "%2B",
+        "°": "%C2%B0",
+        "¡": "",
+        "!": "%21",
+        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
+        "Á": "A", "É": "E", "Í": "I", "Ó": "O", "Ú": "U",
+        "ñ": "n", "Ñ": "N"
+    }
+
+    for original, codificado in reemplazos.items():
+        texto = texto.replace(original, codificado)
+
+    return texto
+
+
+def telegram_configurado():
+    return (
+        BOT_TOKEN != "TU_TOKEN_DE_TELEGRAM"
+        and CHAT_ID != "TU_CHAT_ID"
+        and len(BOT_TOKEN) > 10
+        and len(CHAT_ID) > 0
+    )
+
+
+def mensaje_estado():
+    temp = "SIN LECTURA" if estado["temperatura"] is None else "{:.1f} C".format(estado["temperatura"])
+    hum = "SIN LECTURA" if estado["humedad"] is None else "{:.1f} %".format(estado["humedad"])
+
+    return (
+        "ESTADO DEL SISTEMA\n"
+        "Temperatura: {}\n"
+        "Humedad: {}\n"
+        "DHT: {}\n"
+        "Movimiento: {}\n"
+        "Magnitud: {:.2f} g\n"
+        "Alarma: {}\n"
+        "Boton panico: {}\n"
+        "IP: {}"
+    ).format(
+        temp,
+        hum,
+        "OK" if estado["dht_ok"] else "SIN LECTURA",
+        estado["movimiento"],
+        estado["magnitud_g"],
+        estado["alarma"],
+        estado["panico"],
+        estado["ip"]
+    )
+
+
+def mensaje_umbrales():
+    return (
+        "UMBRALES CONFIGURADOS\n"
+        "Temperatura minima: {:.1f} C\n"
+        "Temperatura maxima: {:.1f} C\n"
+        "Humedad minima: {:.1f} %\n"
+        "Humedad maxima: {:.1f} %\n"
+        "Movimiento normal: > {:.2f} g\n"
+        "Movimiento brusco: > {:.2f} g"
+    ).format(TEMP_MIN, TEMP_MAX, HUM_MIN, HUM_MAX, MOV_NORMAL_G, MOV_BRUSCO_G)
+
+
+async def enviar_telegram(mensaje):
+    """
+    Envia mensaje por Telegram.
+    Si BOT_TOKEN o CHAT_ID no estan configurados, solo imprime en consola.
+    """
+    if not telegram_configurado():
+        print("Telegram no configurado. Mensaje local:", mensaje)
+        return False
+
+    try:
+        url = (
+            "https://api.telegram.org/bot{}/sendMessage?chat_id={}&text={}"
+            .format(BOT_TOKEN, CHAT_ID, url_encode(mensaje))
+        )
+
+        respuesta = urequests.get(url)
+        codigo = respuesta.status_code
+        respuesta.close()
+
+        if codigo == 200:
+            print("Mensaje enviado a Telegram.")
+            return True
+        else:
+            print("Telegram respondio con codigo:", codigo)
+            return False
+
+    except Exception as e:
+        print("Error enviando Telegram:", e)
+        return False
+
+
+async def alerta_sonora(tipo):
+    """
+    Patrones sonoros diferenciados.
+    """
+    if tipo == "TEMPERATURA":
+        frecuencia = 1000
+        repeticiones = 2
+    elif tipo == "HUMEDAD":
+        frecuencia = 1300
+        repeticiones = 3
+    elif tipo == "MOVIMIENTO":
+        frecuencia = 2000
+        repeticiones = 4
+    elif tipo == "PANICO":
+        frecuencia = 2500
+        repeticiones = 5
+    elif tipo == "DHT":
+        frecuencia = 700
+        repeticiones = 1
+    else:
+        frecuencia = 900
+        repeticiones = 1
+
+    for _ in range(repeticiones):
+        buzzer.freq(frecuencia)
+        buzzer.duty(512)
+        await asyncio.sleep(0.16)
+        buzzer.duty(0)
+        await asyncio.sleep(0.12)
+
+    buzzer.duty(0)
+
+
+async def disparar_alerta(tipo, mensaje):
+    """
+    Activa alerta sonora y alerta remota evitando spam.
+    """
+    ahora = time.time()
+    ultimo = ultimo_envio_alerta.get(tipo, 0)
+
+    await alerta_sonora(tipo)
+
+    if ahora - ultimo >= ANTI_SPAM_ALERTA:
+        ultimo_envio_alerta[tipo] = ahora
+        await enviar_telegram("ALERTA {}:\n{}".format(tipo, mensaje))
+
+    print("ALERTA", tipo, mensaje)
+
+
+def leer_dht_seguro():
+    """
+    Lee el DHT evitando que ETIMEDOUT detenga todo el sistema.
+    Si falla, mantiene los valores anteriores y marca dht_ok = False.
+    """
+    try:
+        sensor_dht.measure()
+        temperatura = float(sensor_dht.temperature())
+        humedad = float(sensor_dht.humidity())
+
+        estado["temperatura"] = temperatura
+        estado["humedad"] = humedad
+        estado["dht_ok"] = True
+
+        return temperatura, humedad, True
+
+    except Exception as e:
+        print("Error leyendo DHT:", e)
+        estado["dht_ok"] = False
+
+        # Mantiene ultimos valores validos.
+        return estado["temperatura"], estado["humedad"], False
+
+
+# ======================================================
+# TAREA 1: MONITOREO DE SENSORES
+# ======================================================
+
+async def tarea_sensores():
+    estado["ip"] = obtener_ip()
+
+    await enviar_telegram(
+        "ESP32 iniciado correctamente.\nIP del servidor web: http://{}".format(estado["ip"])
+    )
+
+    while True:
+        alarmas = []
+
+        try:
+            # Lectura DHT protegida.
+            temperatura, humedad, dht_ok = leer_dht_seguro()
+
+            # Lectura MPU6050 protegida.
+            try:
+                ax, ay, az = mpu.leer_aceleracion_g()
+                magnitud = mpu.leer_magnitud_g()
+                movimiento = mpu.clasificar_movimiento(magnitud)
+
+                estado["ax"] = ax
+                estado["ay"] = ay
+                estado["az"] = az
+                estado["magnitud_g"] = magnitud
+                estado["movimiento"] = movimiento
+
+            except Exception as e:
+                print("Error leyendo MPU6050:", e)
+                estado["movimiento"] = "ERROR MPU6050"
+                magnitud = estado["magnitud_g"]
+                movimiento = estado["movimiento"]
+
+            estado["panico"] = "ACTIVO" if pulsador.value() == 0 else "INACTIVO"
+            estado["ultima_actualizacion"] = str(time.time())
+            estado["ip"] = obtener_ip()
+
+            # Solo evalua temperatura y humedad si el DHT tiene lectura valida.
+            if dht_ok:
+                if temperatura < TEMP_MIN:
+                    alarmas.append("TEMPERATURA BAJA")
+                    await disparar_alerta(
+                        "TEMPERATURA",
+                        "Temperatura baja: {:.1f} C. Limite minimo: {:.1f} C"
+                        .format(temperatura, TEMP_MIN)
+                    )
+
+                if temperatura > TEMP_MAX:
+                    alarmas.append("TEMPERATURA ALTA")
+                    await disparar_alerta(
+                        "TEMPERATURA",
+                        "Temperatura alta: {:.1f} C. Limite maximo: {:.1f} C"
+                        .format(temperatura, TEMP_MAX)
+                    )
+
+                if humedad < HUM_MIN:
+                    alarmas.append("HUMEDAD BAJA")
+                    await disparar_alerta(
+                        "HUMEDAD",
+                        "Humedad baja: {:.1f} %. Limite minimo: {:.1f} %"
+                        .format(humedad, HUM_MIN)
+                    )
+
+                if humedad > HUM_MAX:
+                    alarmas.append("HUMEDAD ALTA")
+                    await disparar_alerta(
+                        "HUMEDAD",
+                        "Humedad alta: {:.1f} %. Limite maximo: {:.1f} %"
+                        .format(humedad, HUM_MAX)
+                    )
+            else:
+                alarmas.append("DHT SIN LECTURA")
+                await disparar_alerta(
+                    "DHT",
+                    "No se pudo leer el sensor DHT. Revise tipo de sensor, DATA GPIO 4, VCC 3V3 y GND."
+                )
+
+            if estado["movimiento"] == "MOVIMIENTO BRUSCO":
+                alarmas.append("MOVIMIENTO BRUSCO")
+                await disparar_alerta(
+                    "MOVIMIENTO",
+                    "Movimiento brusco detectado. Magnitud: {:.2f} g"
+                    .format(estado["magnitud_g"])
+                )
+
+            if pulsador.value() == 0:
+                alarmas.append("BOTON DE PANICO")
+                await disparar_alerta(
+                    "PANICO",
+                    "Boton de panico activado manualmente."
+                )
+
+            if len(alarmas) == 0:
+                estado["alarma"] = "NORMAL"
+                buzzer.duty(0)
+            else:
+                estado["alarma"] = " / ".join(alarmas)
+
+        except Exception as e:
+            estado["alarma"] = "ERROR GENERAL"
+            buzzer.duty(0)
+            print("Error general en tarea_sensores:", e)
+
+        gc.collect()
+        await asyncio.sleep(INTERVALO_SENSORES)
+
+
+# ======================================================
+# TAREA 2: SERVIDOR WEB
+# ======================================================
+
+def pagina_web():
+    color_alarma = "#0f9d58" if estado["alarma"] == "NORMAL" else "#d93025"
+
+    temp_web = "SIN LECTURA" if estado["temperatura"] is None else "{:.1f}".format(estado["temperatura"])
+    hum_web = "SIN LECTURA" if estado["humedad"] is None else "{:.1f}".format(estado["humedad"])
+
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="refresh" content="3">
+    <title>Seguimiento V - ESP32</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            background: #f3f6fb;
+            margin: 0;
+            padding: 24px;
+            color: #1f2933;
+        }}
+        .card {{
+            max-width: 760px;
+            margin: auto;
+            background: white;
+            border-radius: 14px;
+            padding: 24px;
+            box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+        }}
+        h1 {{
+            margin-top: 0;
+            color: #0b5394;
+        }}
+        .grid {{
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 14px;
+        }}
+        .box {{
+            background: #eef3f8;
+            border-radius: 10px;
+            padding: 14px;
+        }}
+        .value {{
+            font-size: 28px;
+            font-weight: bold;
+        }}
+        .alarm {{
+            background: {color_alarma};
+            color: white;
+            border-radius: 10px;
+            padding: 14px;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 16px 0;
+        }}
+        .small {{
+            font-size: 13px;
+            color: #5f6b7a;
+        }}
+        table {{
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }}
+        td, th {{
+            padding: 8px;
+            border-bottom: 1px solid #d8dee9;
+            text-align: left;
+        }}
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Monitoreo IoT Biomedico - ESP32</h1>
+        <p class="small">Servidor web embebido con actualizacion automatica cada 3 segundos.</p>
+
+        <div class="alarm">Estado de alarma: {alarma}</div>
+
+        <div class="grid">
+            <div class="box">
+                <div>Temperatura</div>
+                <div class="value">{temperatura} C</div>
+            </div>
+            <div class="box">
+                <div>Humedad relativa</div>
+                <div class="value">{humedad} %</div>
+            </div>
+            <div class="box">
+                <div>Estado de movimiento</div>
+                <div class="value">{movimiento}</div>
+            </div>
+            <div class="box">
+                <div>Magnitud aceleracion</div>
+                <div class="value">{magnitud:.2f} g</div>
+            </div>
+        </div>
+
+        <h2>Estado del sistema</h2>
+        <table>
+            <tr><th>Variable</th><th>Valor</th></tr>
+            <tr><td>Sensor DHT</td><td>{dht_estado}</td></tr>
+            <tr><td>Boton de panico</td><td>{panico}</td></tr>
+            <tr><td>Aceleracion X</td><td>{ax:.2f} g</td></tr>
+            <tr><td>Aceleracion Y</td><td>{ay:.2f} g</td></tr>
+            <tr><td>Aceleracion Z</td><td>{az:.2f} g</td></tr>
+            <tr><td>IP ESP32</td><td>{ip}</td></tr>
+        </table>
+
+        <h2>Umbrales configurados</h2>
+        <table>
+            <tr><th>Parametro</th><th>Rango / limite</th></tr>
+            <tr><td>Temperatura</td><td>{tmin:.1f} C a {tmax:.1f} C</td></tr>
+            <tr><td>Humedad</td><td>{hmin:.1f} % a {hmax:.1f} %</td></tr>
+            <tr><td>Movimiento</td><td>Normal &gt; {mov:.2f} g</td></tr>
+            <tr><td>Movimiento brusco</td><td>&gt; {brusco:.2f} g</td></tr>
+        </table>
+    </div>
+</body>
+</html>
+""".format(
+        color_alarma=color_alarma,
+        alarma=estado["alarma"],
+        temperatura=temp_web,
+        humedad=hum_web,
+        movimiento=estado["movimiento"],
+        magnitud=estado["magnitud_g"],
+        dht_estado="OK" if estado["dht_ok"] else "SIN LECTURA",
+        panico=estado["panico"],
+        ax=estado["ax"],
+        ay=estado["ay"],
+        az=estado["az"],
+        ip=estado["ip"],
+        tmin=TEMP_MIN,
+        tmax=TEMP_MAX,
+        hmin=HUM_MIN,
+        hmax=HUM_MAX,
+        mov=MOV_NORMAL_G,
+        brusco=MOV_BRUSCO_G
+    )
+
+    return html
+
+
+async def servidor_web():
+    async def atender_cliente(reader, writer):
+        try:
+            request = await reader.read(1024)
+            request = request.decode()
+
+            if "GET /json" in request:
+                contenido = ujson.dumps(estado)
+                writer.write("HTTP/1.1 200 OK\r\n")
+                writer.write("Content-Type: application/json\r\n")
+                writer.write("Connection: close\r\n\r\n")
+                writer.write(contenido)
+            else:
+                contenido = pagina_web()
+                writer.write("HTTP/1.1 200 OK\r\n")
+                writer.write("Content-Type: text/html\r\n")
+                writer.write("Connection: close\r\n\r\n")
+                writer.write(contenido)
+
+            await writer.drain()
+            await writer.wait_closed()
+
+        except Exception as e:
+            print("Error cliente web:", e)
+
+    await asyncio.start_server(atender_cliente, "0.0.0.0", 80)
+    print("Servidor web iniciado en http://{}".format(obtener_ip()))
+
+    while True:
+        await asyncio.sleep(3600)
+
+
+# ======================================================
+# TAREA 3: BOT DE TELEGRAM
+# ======================================================
+
+async def tarea_telegram():
+    global telegram_offset
+
+    if not telegram_configurado():
+        print("Telegram no configurado. Configure BOT_TOKEN y CHAT_ID para activar el bot.")
+        return
+
+    while True:
+        try:
+            url = (
+                "https://api.telegram.org/bot{}/getUpdates?offset={}"
+                .format(BOT_TOKEN, telegram_offset)
+            )
+
+            respuesta = urequests.get(url)
+            datos = respuesta.json()
+            respuesta.close()
+
+            if datos.get("ok"):
+                for item in datos.get("result", []):
+                    telegram_offset = item["update_id"] + 1
+
+                    mensaje = item.get("message", {})
+                    texto = mensaje.get("text", "").strip().lower()
+
+                    if texto == "/estado":
+                        await enviar_telegram(mensaje_estado())
+
+                    elif texto == "/temp":
+                        if estado["temperatura"] is None:
+                            await enviar_telegram("Temperatura: SIN LECTURA")
+                        else:
+                            await enviar_telegram(
+                                "Temperatura actual: {:.1f} C".format(estado["temperatura"])
+                            )
+
+                    elif texto == "/humedad":
+                        if estado["humedad"] is None:
+                            await enviar_telegram("Humedad: SIN LECTURA")
+                        else:
+                            await enviar_telegram(
+                                "Humedad actual: {:.1f} %".format(estado["humedad"])
+                            )
+
+                    elif texto == "/movimiento":
+                        await enviar_telegram(
+                            "Movimiento: {}\nMagnitud: {:.2f} g"
+                            .format(estado["movimiento"], estado["magnitud_g"])
+                        )
+
+                    elif texto == "/umbrales":
+                        await enviar_telegram(mensaje_umbrales())
+
+                    elif texto == "/ayuda":
+                        await enviar_telegram(
+                            "Comandos disponibles:\n"
+                            "/estado\n"
+                            "/temp\n"
+                            "/humedad\n"
+                            "/movimiento\n"
+                            "/umbrales\n"
+                            "/ayuda"
+                        )
+
+                    elif texto:
+                        await enviar_telegram("Comando no reconocido. Use /ayuda")
+
+        except Exception as e:
+            print("Error revisando Telegram:", e)
+
+        gc.collect()
+        await asyncio.sleep(INTERVALO_TELEGRAM)
+
+
+# ======================================================
+# PROGRAMA PRINCIPAL
+# ======================================================
+
+async def main():
+    print("Iniciando sistema Seguimiento V...")
+    estado["ip"] = obtener_ip()
+
+    asyncio.create_task(tarea_sensores())
+    asyncio.create_task(servidor_web())
+    asyncio.create_task(tarea_telegram())
+
+    while True:
+        await asyncio.sleep(10)
+
+
+try:
+    asyncio.run(main())
+finally:
+    buzzer.duty(0)
+    asyncio.new_event_loop()
+\end{lstlisting}
+
+\end{document}
+
